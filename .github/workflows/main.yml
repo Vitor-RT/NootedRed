@@ -56,12 +56,10 @@ jobs:
           echo "实现了如下功能：" >> /tmp/xx.md
           echo "1. 恢复被官方删除的VCN相关代码；" >> /tmp/xx.md
           echo "2. 添加BFixup相关代码。" >> /tmp/xx.md
-          echo "直接使用，不需要任何参数即可\`开启硬解\`。" >> /tmp/xx.md
           echo "----------------------------------" >> /tmp/xx.md
           echo "The following functions have been implemented:" >> /tmp/xx.md
           echo "1. Restore the VCN related code which was deleted by the official. 2;" >> /tmp/xx.md
           echo "2. Add BFixup related code." >> /tmp/xx.md
-          echo "Use it directly without any parameters to turn on hard solving." >> /tmp/xx.md
           git log -"1" --format="- %H %s" | sed '/^$/d' >> /tmp/xx.md
 
       - name: 发布

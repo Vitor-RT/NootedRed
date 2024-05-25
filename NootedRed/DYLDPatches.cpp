@@ -77,6 +77,10 @@ void DYLDPatches::wrapCsValidatePage(vnode *vp, memory_object_t pager, memory_ob
 		return;
 	}
 
+	if (!checkKernelArgument("-ChefKissInternal")) {
+		return;
+	}
+
 	auto model = BaseDeviceInfo::get().modelIdentifier;
 	bool isMob = !strncmp(model, "MacBook", strlen("MacBook"));
 
@@ -90,12 +94,7 @@ void DYLDPatches::wrapCsValidatePage(vnode *vp, memory_object_t pager, memory_ob
         {kHEVCEncBoardIdOriginal, kHEVCEncBoardIdPatched, "iMacPro1,1 spoof (AppleGVAHEVCEncoder)"},
     };
     DYLDPatch::applyAll(patches, const_cast<void *>(data), PAGE_SIZE);
-
-	if (!checkKernelArgument("-ChefKissInternal")) {
-		return;
-	}
-
-    if (getKernelVersion() >= KernelVersion::Sonoma) {
+	if (getKernelVersion() >= KernelVersion::Sonoma) {
         const DYLDPatch patches[] = {
 			{kVAAcceleratorInfoIdentifyVenturaOriginal, kVAAcceleratorInfoIdentifyVenturaOriginalMask,
 				kVAAcceleratorInfoIdentifyVenturaPatched, kVAAcceleratorInfoIdentifyVenturaPatchedMask,

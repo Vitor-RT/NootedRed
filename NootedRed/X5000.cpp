@@ -75,22 +75,19 @@ bool X5000::processKext(KernelPatcher &patcher, size_t id, mach_vm_address_t sli
                 {"__ZN37AMDRadeonX5000_AMDGraphicsAccelerator9newSharedEv", wrapNewShared},
                 {"__ZN37AMDRadeonX5000_AMDGraphicsAccelerator19newSharedUserClientEv", wrapNewSharedUserClient},
             };
-            PANIC_COND(!RouteRequestPlus::routeAll(patcher, id, requests, slide, size), "X5000",
-                "Failed to route newShared routes");
+            PANIC_COND(!RouteRequestPlus::routeAll(patcher, id, requests, slide, size), "X5000", "Failed to route newShared routes");
+        }
 
-            if (ventura1304) {
-                RouteRequestPlus request {"__ZN37AMDRadeonX5000_AMDGraphicsAccelerator23obtainAccelChannelGroupE11SS_"
-                                          "PRIORITYP27AMDRadeonX5000_AMDAccelTask",
-                    wrapObtainAccelChannelGroup1304, this->orgObtainAccelChannelGroup};
-                PANIC_COND(!request.route(patcher, id, slide, size), "X5000",
-                    "Failed to route obtainAccelChannelGroup");
-            } else {
-                RouteRequestPlus request {
-                    "__ZN37AMDRadeonX5000_AMDGraphicsAccelerator23obtainAccelChannelGroupE11SS_PRIORITY",
-                    wrapObtainAccelChannelGroup, this->orgObtainAccelChannelGroup};
-                PANIC_COND(!request.route(patcher, id, slide, size), "X5000",
-                    "Failed to route obtainAccelChannelGroup");
-            }
+        if (ventura1304) {
+            RouteRequestPlus request {"__ZN37AMDRadeonX5000_AMDGraphicsAccelerator23obtainAccelChannelGroupE11SS_"
+                                      "PRIORITYP27AMDRadeonX5000_AMDAccelTask",
+                wrapObtainAccelChannelGroup1304, this->orgObtainAccelChannelGroup};
+            PANIC_COND(!request.route(patcher, id, slide, size), "X5000", "Failed to route obtainAccelChannelGroup");
+        } else if (!catalina) {
+            RouteRequestPlus request {
+                "__ZN37AMDRadeonX5000_AMDGraphicsAccelerator23obtainAccelChannelGroupE11SS_PRIORITY",
+                wrapObtainAccelChannelGroup, this->orgObtainAccelChannelGroup};
+            PANIC_COND(!request.route(patcher, id, slide, size), "X5000", "Failed to route obtainAccelChannelGroup");
         }
 
         if (getKernelVersion() > KernelVersion::Sonoma ||
@@ -365,23 +362,9 @@ void *X5000::wrapAllocateAMDHWDisplay(void *that) {
     return FunctionCast(wrapAllocateAMDHWDisplay, X6000::callback->orgAllocateAMDHWDisplay)(that);
 }
 
-void *X5000::wrapNewVideoContext(void *that) {
-    return FunctionCast(wrapNewVideoContext, X6000::callback->orgNewVideoContext)(that);
-}
-
-void *X5000::wrapCreateSMLInterface(UInt32 configBit) {
-    return FunctionCast(wrapCreateSMLInterface, X6000::callback->orgCreateSMLInterface)(configBit);
-}
-
 UInt64 X5000::wrapAdjustVRAMAddress(void *that, UInt64 addr) {
     auto ret = FunctionCast(wrapAdjustVRAMAddress, callback->orgAdjustVRAMAddress)(that, addr);
     return ret != addr ? (ret + NRed::callback->fbOffset) : ret;
-}
-
-void *X5000::wrapNewShared() { return FunctionCast(wrapNewShared, X6000::callback->orgNewShared)(); }
-
-void *X5000::wrapNewSharedUserClient() {
-    return FunctionCast(wrapNewSharedUserClient, X6000::callback->orgNewSharedUserClient)();
 }
 
 void *X5000::wrapAllocateAMDHWAlignManager() {
@@ -433,4 +416,18 @@ UInt32 X5000::wrapHwlConvertChipFamily(void *that, UInt32, UInt32) {
     settings.isDcn1 = 1;
     settings.metaBaseAlignFix = 1;
     return ADDR_CHIP_FAMILY_AI;
+}
+
+void *X5000::wrapNewVideoContext(void *that) {
+    return FunctionCast(wrapNewVideoContext, X6000::callback->orgNewVideoContext)(that);
+}
+
+void *X5000::wrapCreateSMLInterface(UInt32 configBit) {
+    return FunctionCast(wrapCreateSMLInterface, X6000::callback->orgCreateSMLInterface)(configBit);
+}
+
+void *X5000::wrapNewShared() { return FunctionCast(wrapNewShared, X6000::callback->orgNewShared)(); }
+
+void *X5000::wrapNewSharedUserClient() {
+    return FunctionCast(wrapNewSharedUserClient, X6000::callback->orgNewSharedUserClient)();
 }

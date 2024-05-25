@@ -50,25 +50,6 @@ bool X6000::processKext(KernelPatcher &patcher, size_t id, mach_vm_address_t sli
         };
         PANIC_COND(!RouteRequestPlus::routeAll(patcher, id, requests, slide, size), "X6000", "Failed to route symbols");
 
-        bool catalina = getKernelVersion() == KernelVersion::Catalina;
-        if (!catalina) {
-            SolveRequestPlus solveRequests[] = {
-                {"__ZN37AMDRadeonX6000_AMDGraphicsAccelerator9newSharedEv", this->orgNewShared},
-                {"__ZN37AMDRadeonX6000_AMDGraphicsAccelerator19newSharedUserClientEv", this->orgNewSharedUserClient},
-            };
-            PANIC_COND(!SolveRequestPlus::solveAll(patcher, id, solveRequests, slide, size), "X6000",
-                "Failed to resolve newShared symbols");
-
-            RouteRequestPlus requests[] = {
-                {"__ZN39AMDRadeonX6000_AMDAccelSharedUserClient5startEP9IOService", wrapAccelSharedUCStartX6000},
-                {"__ZN39AMDRadeonX6000_AMDAccelSharedUserClient4stopEP9IOService", wrapAccelSharedUCStopX6000},
-                {"__ZN29AMDRadeonX6000_AMDAccelShared11SurfaceCopyEPjyP12IOAccelEvent", wrapAccelSharedSurfaceCopy,
-                    this->orgAccelSharedSurfaceCopy},
-            };
-            PANIC_COND(!RouteRequestPlus::routeAll(patcher, id, requests, slide, size), "X6000",
-                "Failed to route AccelShared symbols");
-        }
-
         if (NRed::callback->chipType < ChipType::Renoir) {
             RouteRequestPlus request = {"__ZN30AMDRadeonX6000_AMDGFX10Display23initDCNRegistersOffsetsEv",
                 wrapInitDCNRegistersOffsets, this->orgInitDCNRegistersOffsets};
@@ -82,6 +63,7 @@ bool X6000::processKext(KernelPatcher &patcher, size_t id, mach_vm_address_t sli
             PANIC_COND(!request.route(patcher, id, slide, size), "X6000", "Failed to route allocateScanout");
         }
 
+        bool catalina = getKernelVersion() == KernelVersion::Catalina;
         if (catalina) {
             const LookupPatchPlus patches[] = {
                 {&kextRadeonX6000, kHWChannelSubmitCommandBufferCatalinaOriginal,
@@ -91,6 +73,18 @@ bool X6000::processKext(KernelPatcher &patcher, size_t id, mach_vm_address_t sli
             SYSLOG_COND(!LookupPatchPlus::applyAll(patcher, patches, slide, size), "X6000", "Failed to apply patches");
             patcher.clearError();
         } else {
+            SolveRequestPlus solveRequests[] = {
+                {"__ZN37AMDRadeonX6000_AMDGraphicsAccelerator9newSharedEv", this->orgNewShared},
+                {"__ZN37AMDRadeonX6000_AMDGraphicsAccelerator19newSharedUserClientEv", this->orgNewSharedUserClient},
+            };
+            PANIC_COND(!SolveRequestPlus::solveAll(patcher, id, solveRequests, slide, size), "X6000", "Failed to resolve newShared symbols");
+
+            RouteRequestPlus requests[] = {
+                {"__ZN39AMDRadeonX6000_AMDAccelSharedUserClient5startEP9IOService", wrapAccelSharedUCStartX6000},
+                {"__ZN39AMDRadeonX6000_AMDAccelSharedUserClient4stopEP9IOService", wrapAccelSharedUCStopX6000},
+                {"__ZN29AMDRadeonX6000_AMDAccelShared11SurfaceCopyEPjyP12IOAccelEvent", wrapAccelSharedSurfaceCopy, this->orgAccelSharedSurfaceCopy},
+            };
+            PANIC_COND(!RouteRequestPlus::routeAll(patcher, id, requests, slide, size), "X6000", "Failed to route AccelShared symbols");
             const LookupPatchPlus patch {&kextRadeonX6000, kHWChannelSubmitCommandBufferOriginal,
                 kHWChannelSubmitCommandBufferPatched, 1};
             SYSLOG_COND(!patch.apply(patcher, slide, size), "X6000", "Failed to apply submitCommandBuffer patch");
@@ -200,14 +194,6 @@ bool X6000::processKext(KernelPatcher &patcher, size_t id, mach_vm_address_t sli
  */
 bool X6000::wrapAccelStartX6000() { return false; }
 
-bool X6000::wrapAccelSharedUCStartX6000(void *that, void *provider) {
-    return FunctionCast(wrapAccelSharedUCStartX6000, X5000::callback->orgAccelSharedUCStart)(that, provider);
-}
-
-bool X6000::wrapAccelSharedUCStopX6000(void *that, void *provider) {
-    return FunctionCast(wrapAccelSharedUCStopX6000, X5000::callback->orgAccelSharedUCStop)(that, provider);
-}
-
 void X6000::wrapInitDCNRegistersOffsets(void *that) {
     FunctionCast(wrapInitDCNRegistersOffsets, callback->orgInitDCNRegistersOffsets)(that);
     auto fieldBase = getKernelVersion() == KernelVersion::Catalina ? 0x4838 :
@@ -279,14 +265,6 @@ void X6000::wrapInitDCNRegistersOffsets(void *that) {
 #define HWALIGNMGR_ADJUST getMember<void *>(X5000::callback->hwAlignMgr, 0) = X5000::callback->hwAlignMgrVtX6000;
 #define HWALIGNMGR_REVERT getMember<void *>(X5000::callback->hwAlignMgr, 0) = X5000::callback->hwAlignMgrVtX5000;
 
-UInt64 X6000::wrapAccelSharedSurfaceCopy(void *that, void *param1, UInt64 param2, void *param3) {
-    HWALIGNMGR_ADJUST
-    auto ret =
-        FunctionCast(wrapAccelSharedSurfaceCopy, callback->orgAccelSharedSurfaceCopy)(that, param1, param2, param3);
-    HWALIGNMGR_REVERT
-    return ret;
-}
-
 UInt64 X6000::wrapAllocateScanoutFB(void *that, UInt32 param1, void *param2, void *param3, void *param4) {
     HWALIGNMGR_ADJUST
     auto ret =
@@ -313,6 +291,22 @@ UInt64 X6000::wrapGetDisplayInfo(void *that, UInt32 param1, bool param2, bool pa
     HWALIGNMGR_ADJUST
     auto ret =
         FunctionCast(wrapGetDisplayInfo, callback->orgGetDisplayInfo)(that, param1, param2, param3, param4, param5);
+    HWALIGNMGR_REVERT
+    return ret;
+}
+
+bool X6000::wrapAccelSharedUCStartX6000(void *that, void *provider) {
+    return FunctionCast(wrapAccelSharedUCStartX6000, X5000::callback->orgAccelSharedUCStart)(that, provider);
+}
+
+bool X6000::wrapAccelSharedUCStopX6000(void *that, void *provider) {
+    return FunctionCast(wrapAccelSharedUCStopX6000, X5000::callback->orgAccelSharedUCStop)(that, provider);
+}
+
+UInt64 X6000::wrapAccelSharedSurfaceCopy(void *that, void *param1, UInt64 param2, void *param3) {
+    HWALIGNMGR_ADJUST
+    auto ret =
+        FunctionCast(wrapAccelSharedSurfaceCopy, callback->orgAccelSharedSurfaceCopy)(that, param1, param2, param3);
     HWALIGNMGR_REVERT
     return ret;
 }
